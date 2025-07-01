@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from streamlit_autorefresh import st_autorefresh
 import os
 import time
-from AeroAPI import AeroAPI
+import AeroAPI
 
 # ==== CONFIG ====
 HOME_LAT = 37.399746   # your home latitude
