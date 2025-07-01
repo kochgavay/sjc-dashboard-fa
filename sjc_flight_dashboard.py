@@ -1,11 +1,11 @@
 import streamlit as st
+import requests
 import math
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from streamlit_autorefresh import st_autorefresh
 import os
 import time
-from AeroAPI import AeroAPI
 
 # ==== CONFIG ====
 HOME_LAT = 37.399746   # your home latitude
@@ -100,7 +100,7 @@ ICAO_TO_CITY = {
 
 # ==== FLIGHTAWARE CONFIG ====
 FLIGHTAWARE_API_KEY = 'gjHfOw8lEoR3eck5zN50DTGFeSnyxxPy'
-aeroapi = AeroAPI(FLIGHTAWARE_API_KEY)
+FLIGHTAWARE_BASE_URL = 'https://aeroapi.flightaware.com/aeroapi'
 
 # ==== FUNCTIONS ====
 def haversine(lat1, lon1, lat2, lon2):
@@ -111,22 +111,42 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 def get_flights_near_home():
-    # Use AeroAPI to get flights near home location
-    # The radius is in kilometers
+    # Use FlightAware AeroAPI to get flights near home location
+    headers = {
+        'x-apikey': FLIGHTAWARE_API_KEY
+    }
+    
+    # Convert km to miles for FlightAware API
+    radius_miles = MAX_DISTANCE_KM * 0.621371
+    
+    url = f"{FLIGHTAWARE_BASE_URL}/flights/search"
+    params = {
+        'query': f"lat:{HOME_LAT} lon:{HOME_LON} radius:{radius_miles}mi"
+    }
+    
     try:
-        flights = aeroapi.flights.get_flights_nearby(HOME_LAT, HOME_LON, MAX_DISTANCE_KM)
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract flights from the response
+        flights = data.get('flights', [])
         return flights
     except Exception as e:
         st.error(f"Error fetching flight data from FlightAware: {e}")
         return []
 
 def extract_details(flight):
-    # flight is a dict from AeroAPI
-    destination_icao = flight.get('destination')
+    # flight is a dict from FlightAware API
+    destination_icao = flight.get('destination', {}).get('code')
     destination = ICAO_TO_CITY.get(destination_icao, destination_icao or "Unknown")
-    airline = flight.get('operator', "Private")
-    aircraft_type_code = flight.get('aircraft_type', "Unknown")
-    aircraft_type = AIRCRAFT_TYPES.get(aircraft_type_code, aircraft_type_code)
+    
+    operator = flight.get('operator', {})
+    airline = operator.get('name', "Private")
+    
+    aircraft_type_code = flight.get('aircraft_type')
+    aircraft_type = AIRCRAFT_TYPES.get(aircraft_type_code, aircraft_type_code or "Unknown")
+    
     return destination, airline, aircraft_type
 
 # ==== UI ====
