@@ -112,28 +112,30 @@ def haversine(lat1, lon1, lat2, lon2):
 
 def get_flights_near_home():
     # Use FlightAware AeroAPI to get flights near home location
-    headers = {
-        'x-apikey': FLIGHTAWARE_API_KEY
-    }
+    # Try basic authentication first
+    auth = ('', FLIGHTAWARE_API_KEY)  # username empty, password is the API key
     
-    # Convert km to miles for FlightAware API
-    radius_miles = MAX_DISTANCE_KM * 0.621371
-    
-    url = f"{FLIGHTAWARE_BASE_URL}/flights/search"
-    params = {
-        'query': f"lat:{HOME_LAT} lon:{HOME_LON} radius:{radius_miles}mi"
-    }
+    # Try a simple endpoint first to test the API key
+    url = f"{FLIGHTAWARE_BASE_URL}/airports/KSJC"
     
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, auth=auth, timeout=10)
         response.raise_for_status()
         data = response.json()
         
+        # If this works, try to get flights
+        flights_url = f"{FLIGHTAWARE_BASE_URL}/airports/KSJC/flights"
+        flights_response = requests.get(flights_url, auth=auth, params={'max_pages': 1}, timeout=10)
+        flights_response.raise_for_status()
+        flights_data = flights_response.json()
+        
         # Extract flights from the response
-        flights = data.get('flights', [])
+        flights = flights_data.get('flights', [])
         return flights
     except Exception as e:
         st.error(f"Error fetching flight data from FlightAware: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            st.error(f"Response: {e.response.text}")
         return []
 
 def extract_details(flight):
