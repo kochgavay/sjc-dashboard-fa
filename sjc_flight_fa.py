@@ -41,7 +41,7 @@ AIRCRAFT_TYPES = {
 }
 
 # --- FlightAware API Setup ---
-AEROAPI_BASE_URL = "https://aeroapi.flightaware.com/aeroapi"
+AEROAPI_BASE_URL = "https://aeroapi.flightaware.com/aeroapi/flights/search?query=-latlong+%2244.953469+-111.045360+40.962321+-104.046577%22"
 AEROAPI_KEY = os.environ.get("AEROAPI_KEY", "gjHfOw8lEoR3eck5zN50DTGFeSnyxxPy")
 CACHE_TIME = int(os.environ.get("CACHE_TIME", 30))
 AEROAPI = requests.Session()
