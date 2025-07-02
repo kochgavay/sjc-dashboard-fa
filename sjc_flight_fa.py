@@ -1,5 +1,7 @@
 import streamlit as st
-from time import sleep
+import requests
+import os
+from time import sleep, time
 
 # --- Mappings (from your JS) ---
 AIRLINE_CODES = {
@@ -38,60 +40,14 @@ AIRCRAFT_TYPES = {
     "MD90": "McDonnell Douglas MD-90"
 }
 
-# --- Sample Data (from your JS, trimmed for brevity) ---
-SAMPLE_FLIGHTS = [
-    {
-        "ident": "ASA1175",
-        "ident_icao": "ASA1175",
-        "ident_iata": "AS1175",
-        "origin": {
-            "code": "KSFO",
-            "city": "San Francisco"
-        },
-        "destination": {
-            "code": "KSEA",
-            "city": "Seattle"
-        },
-        "last_position": {
-            "altitude_change": "C"
-        },
-        "aircraft_type": "B739"
-    },
-    {
-        "ident": "UAL200",
-        "ident_icao": "UAL200",
-        "ident_iata": "UA200",
-        "origin": {
-            "code": "KDEN",
-            "city": "Denver"
-        },
-        "destination": {
-            "code": "KSFO",
-            "city": "San Francisco"
-        },
-        "last_position": {
-            "altitude_change": "D"
-        },
-        "aircraft_type": "B738"
-    },
-    {
-        "ident": "FFT1234",
-        "ident_icao": "FFT1234",
-        "ident_iata": "F91234",
-        "origin": {
-            "code": "KLAX",
-            "city": "Los Angeles"
-        },
-        "destination": {
-            "code": "KSJC",
-            "city": "San Jose"
-        },
-        "last_position": {
-            "altitude_change": None
-        },
-        "aircraft_type": "A320"
-    }
-]
+# --- FlightAware API Setup ---
+AEROAPI_BASE_URL = "https://aeroapi.flightaware.com/aeroapi"
+AEROAPI_KEY = os.environ.get("AEROAPI_KEY", "gjHfOw8lEoR3eck5zN50DTGFeSnyxxPy")
+CACHE_TIME = int(os.environ.get("CACHE_TIME", 30))
+AEROAPI = requests.Session()
+AEROAPI.headers.update({"x-apikey": AEROAPI_KEY})
+
+LATLONG = "44.953469 -111.045360 40.962321 -104.046577"
 
 # --- Helper for icon ---
 def get_flight_icon(altitude_change):
@@ -102,21 +58,31 @@ def get_flight_icon(altitude_change):
     else:
         return ""
 
+# --- Fetch and cache flights ---
+@st.cache_data(ttl=CACHE_TIME, show_spinner=False)
+def fetch_flights():
+    url = f"{AEROAPI_BASE_URL}/flights/search"
+    params = {"query": f"-latlong {LATLONG}"}
+    try:
+        resp = AEROAPI.get(url, params=params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("flights", [])
+    except Exception as e:
+        st.error(f"Error fetching flight data: {e}")
+        return []
+
 # --- Streamlit UI ---
 st.set_page_config(page_title="Flight Card Prototype", layout="centered")
 st.title("Flight Data")
 
-# Loading indicator
 with st.spinner("Loading flight data..."):
-    sleep(1)  # Simulate loading
+    flights = fetch_flights()
 
-# Error simulation (set to True to show error)
-show_error = False
-if show_error:
-    st.error("Error loading flight data: Invalid API key. Please check your internet connection or API key.")
+if not flights:
+    st.info("Clear skies!")
 else:
-    # Card container
-    for flight in SAMPLE_FLIGHTS:
+    for flight in flights:
         # Determine which city to display (origin or destination)
         origin_code = flight.get("origin", {}).get("code")
         destination_code = flight.get("destination", {}).get("code")
@@ -132,7 +98,8 @@ else:
         # Icon
         icon = get_flight_icon(flight.get("last_position", {}).get("altitude_change"))
         # Airline and aircraft type
-        ident_prefix = flight["ident"][:3]
+        ident = flight.get("ident", "N/A")
+        ident_prefix = ident[:3]
         airline_name = AIRLINE_CODES.get(ident_prefix, ident_prefix)
         flight_number = flight.get("ident_iata", "N/A").lstrip(ident_prefix) if flight.get("ident_iata") else "N/A"
         aircraft_type_code = flight.get("aircraft_type", "N/A")
@@ -151,5 +118,3 @@ else:
         @keyframes softBlink {{ 0% {{ opacity: 1; }} 100% {{ opacity: 0.2; }} }}
         </style>
         ''', unsafe_allow_html=True)
-    if not SAMPLE_FLIGHTS:
-        st.info("Clear skies!")
